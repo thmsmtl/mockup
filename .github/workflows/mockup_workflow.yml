@@ -6,6 +6,10 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   generate-mockup:
     runs-on: ubuntu-latest
@@ -23,9 +27,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pillow requests
+          
+      - name: List repository contents
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "\nRepository contents:"
+          ls -la
+          echo "\nTemplate file:"
+          ls -la phone_mockup.png
 
       - name: Download image and generate mockup
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python .github/scripts/process_image.py
+        
+      - name: Upload mockup as artifact
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: generated-mockup
+          path: mockup_result.png
