@@ -9,11 +9,27 @@ def get_image_url_from_comment(body):
     """Extraire l'URL de l'image du commentaire"""
     pattern = r'/mockup\s+(https?://[^\s]+)'
     match = re.search(pattern, body)
-    return match.group(1) if match else None
+    if not match:
+        raise ValueError("Aucune URL d'image trouvée dans le commentaire")
+    url = match.group(1)
+    print(f"URL extraite : {url}")
+    return url
 
 def download_image(url):
     """Télécharger l'image depuis l'URL"""
-    response = requests.get(url)
+    print(f"Téléchargement de l'image depuis : {url}")
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        raise ValueError(f"Erreur lors du téléchargement de l'image. Status code: {response.status_code}")
+    
+    content_type = response.headers.get('content-type', '')
+    if not content_type.startswith('image/'):
+        raise ValueError(f"Le contenu téléchargé n'est pas une image. Content-Type: {content_type}")
+    
+    print(f"Image téléchargée avec succès. Taille: {len(response.content)} bytes")
     return Image.open(BytesIO(response.content))
 
 def create_mockup(input_image):
@@ -30,7 +46,11 @@ def create_mockup(input_image):
     mockup_path = os.path.join(repo_root, 'phone_mockup.png')
     
     print(f"Recherche du template mockup à : {mockup_path}")
+    if not os.path.exists(mockup_path):
+        raise FileNotFoundError(f"Template mockup non trouvé à : {mockup_path}")
+    
     mockup_template = Image.open(mockup_path).convert('RGBA')
+    print("Template mockup chargé avec succès")
     
     # Redimensionner l'image source
     input_image = input_image.convert('RGBA')
@@ -45,6 +65,7 @@ def create_mockup(input_image):
         new_width = int(SCREEN_HEIGHT * img_ratio)
         
     input_image = input_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    print(f"Image redimensionnée à : {new_width}x{new_height}")
     
     # Centrer l'image
     temp_image = Image.new('RGBA', (SCREEN_WIDTH, SCREEN_HEIGHT), (0, 0, 0, 0))
@@ -60,6 +81,7 @@ def create_mockup(input_image):
     
     # Ajouter le template
     final_image = Image.alpha_composite(final_image, mockup_template)
+    print("Mockup généré avec succès")
     return final_image
 
 def post_comment(issue_number, image_path):
@@ -82,20 +104,20 @@ def post_comment(issue_number, image_path):
 
 def main():
     try:
+        print("Démarrage du script de génération de mockup")
         # Lire l'événement GitHub
         event_path = os.environ.get('GITHUB_EVENT_PATH')
         if not event_path:
             raise ValueError("GITHUB_EVENT_PATH non défini")
-            
+        
+        print(f"Lecture de l'événement depuis : {event_path}")
         with open(event_path) as f:
             event = json.load(f)
         
         # Extraire l'URL de l'image
         body = event.get('comment', {}).get('body') or event['issue']['body']
+        print(f"Contenu du message : {body}")
         image_url = get_image_url_from_comment(body)
-        
-        if not image_url:
-            raise ValueError("Aucune URL d'image trouvée dans le commentaire")
         
         print(f"Téléchargement de l'image depuis : {image_url}")
         input_image = download_image(image_url)
